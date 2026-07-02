@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NFL Fan Intelligence Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --nfl-dark: #0e1726;
+    --nfl-navy: #162035;
+    --nfl-card: #1c2a42;
+    --nfl-border: rgba(255,255,255,0.13);
+    --nfl-gold: #f5c518;
+    --nfl-gold-light: #ffe066;
+    --nfl-red: #e03e3e;
+    --nfl-blue: #2d6be4;
+    --nfl-green: #22c55e;
+    --text-primary: #ffffff;
+    --text-secondary: #b0bcd4;
+    --text-muted: #6b7fa0;
+    --accent: #f5c518;
+    --accent2: #38bdf8;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--nfl-dark);
+    color: var(--text-primary);
+    font-family: 'Barlow', sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* Field-line background texture */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      repeating-linear-gradient(90deg, rgba(56,189,248,0.06) 0px, rgba(56,189,248,0.06) 1px, transparent 1px, transparent 80px),
+      repeating-linear-gradient(0deg, rgba(56,189,248,0.06) 0px, rgba(56,189,248,0.06) 1px, transparent 1px, transparent 80px);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .page { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; padding: 0 24px 60px; }
+
+  /* HEADER */
+  .header {
+    padding: 36px 0 32px;
+    border-bottom: 1px solid var(--nfl-border);
+    margin-bottom: 32px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 20px;
+  }
+  .header-left {}
+  .header-eyebrow {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+  .header-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 42px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    line-height: 1;
+    color: var(--text-primary);
+  }
+  .header-title span { color: var(--accent); }
+  .header-subtitle {
+    margin-top: 8px;
+    font-size: 14px;
+    color: var(--text-secondary);
+  }
+  .header-meta {
+    display: flex;
+    gap: 24px;
+    flex-shrink: 0;
+  }
+  .meta-pill {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--nfl-border);
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-align: center;
+  }
+  .meta-pill strong {
+    display: block;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  /* NAV TABS */
+  .nav-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 28px;
+    border-bottom: 1px solid var(--nfl-border);
+    padding-bottom: 0;
+  }
+  .nav-tab {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #6b7fa0;
+    padding: 10px 20px;
+    cursor: pointer;
+    border: none;
+    background: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .nav-tab:hover { color: #b0bcd4; }
+  .nav-tab.active { color: #f5c518; border-bottom-color: #f5c518; }
+
+  /* PANELS */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* KPI ROW */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  .kpi-card {
+    background: #1e2d47;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 10px;
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 3px;
+    background: var(--kpi-color, var(--accent));
+  }
+  .kpi-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #8fa8c8;
+    margin-bottom: 8px;
+  }
+  .kpi-value {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 32px;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1;
+  }
+  .kpi-sub {
+    font-size: 12px;
+    color: #b0bcd4;
+    margin-top: 6px;
+  }
+
+  /* SECTION TITLES */
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    gap: 16px;
+  }
+  .section-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #ffffff;
+  }
+  .section-title span {
+    color: var(--accent);
+  }
+  .section-desc {
+    font-size: 12px;
+    color: #7a90b0;
+  }
+
+  /* CARDS */
+  .card {
+    background: #1c2a42;
+    border: 1px solid rgba(255,255,255,0.13);
+    border-radius: 10px;
+    padding: 22px;
+  }
+
+  /* GRID LAYOUTS */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+  .col-span-2 { grid-column: span 2; }
+
+  /* TEAM RANKING TABLE */
+  .ranking-table { width: 100%; border-collapse: collapse; }
+  .ranking-table th {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #7a90b0;
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid rgba(255,255,255,0.12);
+  }
+  .ranking-table th.right { text-align: right; }
+  .ranking-table td {
+    padding: 9px 12px;
+    font-size: 13px;
+    color: #b0bcd4;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    vertical-align: middle;
+  }
+  .ranking-table td.right { text-align: right; }
+  .ranking-table tr:last-child td { border-bottom: none; }
+  .ranking-table tr:hover td { background: rgba(56,189,248,0.07); }
+  .rank-num {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: #6b7fa0;
+    width: 32px;
+  }
+  .rank-num.top3 { color: #f5c518; }
+  .team-name-cell {
+    font-weight: 600;
+    color: #ffffff;
+    font-size: 14px;
+  }
+  .team-conf {
+    font-size: 11px;
+    color: #6b7fa0;
+    margin-left: 6px;
+    font-weight: 400;
+  }
+  .score-bar-wrap { display: flex; align-items: center; gap: 8px; }
+  .score-bar {
+    flex: 1;
+    height: 5px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .score-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: var(--bar-color, var(--accent));
+  }
+  .score-val {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    min-width: 30px;
+    text-align: right;
+  }
+
+  /* FILTER CONTROLS */
+  .filter-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .filter-btn {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 6px 14px;
+    border-radius: 5px;
+    border: 1px solid rgba(255,255,255,0.18);
+    background: rgba(255,255,255,0.07);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .filter-btn:hover { background: rgba(56,189,248,0.15); color: #fff; border-color: rgba(56,189,248,0.5); }
+  .filter-btn.active { background: var(--accent); color: #0e1726; border-color: var(--accent); font-weight: 700; }
+
+  /* SELECT */
+  select {
+    background: rgba(255,255,255,0.09);
+    border: 1px solid rgba(255,255,255,0.18);
+    color: var(--text-primary);
+    font-family: 'Barlow', sans-serif;
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    outline: none;
+  }
+  select option { background: #1c2a42; color: #fff; }
+
+  /* MAP */
+  #map-container svg { width: 100%; height: auto; }
+  .map-legend {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #7a90b0;
+    margin-top: 12px;
+  }
+  .legend-grad {
+    width: 120px;
+    height: 8px;
+    border-radius: 4px;
+    background: linear-gradient(to right, #162035, #1e5fa8, #38bdf8, #bae6fd);
+  }
+
+  /* HOME/AWAY RATIO */
+  .ratio-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .ratio-team { font-size: 13px; font-weight: 600; color: #ffffff; width: 140px; flex-shrink: 0; }
+  .ratio-bar-wrap { flex: 1; height: 12px; border-radius: 6px; overflow: hidden; display: flex; }
+  .ratio-home { background: var(--accent); }
+  .ratio-away { background: #2d6be4; }
+  .ratio-labels { display: flex; gap: 6px; font-size: 11px; color: var(--text-muted); min-width: 80px; text-align: right; }
+
+  /* TOOLTIP */
+  .chart-tooltip {
+    position: absolute;
+    background: var(--nfl-card);
+    border: 1px solid var(--nfl-border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 100;
+    white-space: nowrap;
+  }
+
+  /* TEAM SPOTLIGHT */
+  .spotlight-grid {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 20px;
+  }
+  .spotlight-card {
+    background: var(--nfl-card);
+    border: 1px solid var(--nfl-border);
+    border-radius: 10px;
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .spotlight-team-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--text-primary);
+    line-height: 1.1;
+  }
+  .spotlight-stat {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--nfl-border);
+  }
+  .spotlight-stat:last-child { border-bottom: none; }
+  .s-label { font-size: 12px; color: var(--text-muted); }
+  .s-val {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+  .s-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(212,160,23,0.15);
+    color: var(--accent);
+  }
+
+  /* CHART WRAPPERS */
+  .chart-wrap { position: relative; width: 100%; }
+
+  /* CORRELATION SCATTER LABELS */
+  .corr-note {
+    font-size: 11px;
+    color: #7a90b0;
+    margin-top: 10px;
+    text-align: center;
+  }
+
+  /* RESPONSIVE */
+  @media (max-width: 900px) {
+    .kpi-row { grid-template-columns: repeat(2,1fr); }
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .col-span-2 { grid-column: span 1; }
+    .spotlight-grid { grid-template-columns: 1fr; }
+    .header { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-left">
+      <div class="header-eyebrow">NFL Fan Intelligence</div>
+      <div class="header-title">FAN <span>PULSE</span> DASHBOARD</div>
+      <div class="header-subtitle">Popularity · Geography · Trends · Performance Correlation &nbsp;·&nbsp; 2015–2024</div>
+    </div>
+    <div class="header-meta">
+      <div class="meta-pill"><strong>32</strong>Teams</div>
+      <div class="meta-pill"><strong>10</strong>Seasons</div>
+      <div class="meta-pill"><strong>3</strong>Metrics</div>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showPanel('overview')">Overview</button>
+    <button class="nav-tab" onclick="showPanel('geography')">Fan Geography</button>
+    <button class="nav-tab" onclick="showPanel('trends')">Popularity Trends</button>
+    <button class="nav-tab" onclick="showPanel('correlation')">Performance vs Popularity</button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ PANEL 1: OVERVIEW -->
+  <div id="panel-overview" class="panel active">
+
+    <div class="kpi-row">
+      <div class="kpi-card" style="--kpi-color:#f5c518">
+        <div class="kpi-label">Most Popular Team</div>
+        <div class="kpi-value">Cowboys</div>
+        <div class="kpi-sub">Composite score 94/100</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#38bdf8">
+        <div class="kpi-label">Avg Game Viewership</div>
+        <div class="kpi-value">16.4M</div>
+        <div class="kpi-sub">TV viewers per game (2024)</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#4ade80">
+        <div class="kpi-label">Avg Attendance Rate</div>
+        <div class="kpi-value">94.2%</div>
+        <div class="kpi-sub">Stadium capacity filled</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#c084fc">
+        <div class="kpi-label">Top Google Trends Team</div>
+        <div class="kpi-value">Chiefs</div>
+        <div class="kpi-sub">Search index peak: 98</div>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-bottom:20px">
+      <!-- RANKING TABLE -->
+      <div class="card">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Team <span>Popularity</span> Ranking</div>
+            <div class="section-desc">Composite of TV ratings · Google Trends · Attendance</div>
+          </div>
+          <div class="filter-row">
+            <button class="filter-btn active" onclick="filterConf(this,'ALL')">All</button>
+            <button class="filter-btn" onclick="filterConf(this,'AFC')">AFC</button>
+            <button class="filter-btn" onclick="filterConf(this,'NFC')">NFC</button>
+          </div>
+        </div>
+        <div style="max-height:420px;overflow-y:auto;">
+          <table class="ranking-table" id="rankTable">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Team</th>
+                <th class="right">TV (M)</th>
+                <th class="right">Trends</th>
+                <th class="right">Att%</th>
+                <th class="right">Score</th>
+              </tr>
+            </thead>
+            <tbody id="rankBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- COMPOSITE SCORE BAR CHART -->
+      <div class="card">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Top 15 <span>Composite</span> Scores</div>
+            <div class="section-desc">Normalized 0–100 across all three metrics</div>
+          </div>
+        </div>
+        <div class="chart-wrap" style="height:380px">
+          <canvas id="popularityBarChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- METRIC BREAKDOWN RADAR -->
+    <div class="grid-3">
+      <div class="card">
+        <div class="section-title" style="margin-bottom:12px">TV <span>Viewership</span> Leaders</div>
+        <div id="tvBars"></div>
+      </div>
+      <div class="card">
+        <div class="section-title" style="margin-bottom:12px">Google <span>Trends</span> Leaders</div>
+        <div id="trendBars"></div>
+      </div>
+      <div class="card">
+        <div class="section-title" style="margin-bottom:12px">Stadium <span>Attendance</span> Leaders</div>
+        <div id="attBars"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ PANEL 2: GEOGRAPHY -->
+  <div id="panel-geography" class="panel">
+    <div class="kpi-row">
+      <div class="kpi-card" style="--kpi-color:#f5c518">
+        <div class="kpi-label">Most Geographically Spread</div>
+        <div class="kpi-value">Cowboys</div>
+        <div class="kpi-sub">Fans in all 50 states</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#38bdf8">
+        <div class="kpi-label">Most Local Fanbase</div>
+        <div class="kpi-value">Packers</div>
+        <div class="kpi-sub">72% of fans from Wisconsin</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#4ade80">
+        <div class="kpi-label">Avg Home-State Ratio</div>
+        <div class="kpi-value">44%</div>
+        <div class="kpi-sub">Fans from team's home state</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#fb923c">
+        <div class="kpi-label">Biggest National Brand</div>
+        <div class="kpi-value">Patriots</div>
+        <div class="kpi-sub">56% fans outside New England</div>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-bottom:20px">
+      <div class="card col-span-2">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Fan <span>Concentration</span> by State</div>
+            <div class="section-desc">Google Trends interest index — select a team to highlight their geographic reach</div>
+          </div>
+          <select id="mapTeamSelect" onchange="updateMap()">
+            <option value="Cowboys">Cowboys</option>
+            <option value="Chiefs">Chiefs</option>
+            <option value="Patriots">Patriots</option>
+            <option value="Packers">Packers</option>
+            <option value="Steelers">Steelers</option>
+            <option value="Bears">Bears</option>
+            <option value="Giants">Giants</option>
+            <option value="49ers">49ers</option>
+          </select>
+        </div>
+        <div id="map-container"></div>
+        <div class="map-legend">
+          <span>Low interest</span>
+          <div class="legend-grad"></div>
+          <span>High interest</span>
+          <span style="margin-left:auto;font-size:11px">Based on Google Trends regional data (representative)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Home vs Away <span>Fan Ratio</span></div>
+          <div class="section-desc">% of fanbase from home state (gold) vs rest of US (blue) — select teams to compare</div>
+        </div>
+      </div>
+      <div id="ratioChart"></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ PANEL 3: TRENDS -->
+  <div id="panel-trends" class="panel">
+    <div class="kpi-row">
+      <div class="kpi-card" style="--kpi-color:#f5c518">
+        <div class="kpi-label">Fastest Growing (10yr)</div>
+        <div class="kpi-value">Chiefs</div>
+        <div class="kpi-sub">+340% search interest since 2015</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#f87171">
+        <div class="kpi-label">Biggest Decline</div>
+        <div class="kpi-value">Raiders</div>
+        <div class="kpi-sub">–18% avg viewership since 2019</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#38bdf8">
+        <div class="kpi-label">Most Consistent</div>
+        <div class="kpi-value">Steelers</div>
+        <div class="kpi-sub">±4% variance over 10 seasons</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#4ade80">
+        <div class="kpi-label">Peak Viewership Year</div>
+        <div class="kpi-value">2023</div>
+        <div class="kpi-sub">18.1M avg viewers league-wide</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:20px">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Popularity <span>Trend Lines</span> (2015–2024)</div>
+          <div class="section-desc">Google Trends index — select teams to compare</div>
+        </div>
+        <div class="filter-row">
+          <button class="filter-btn active" id="trendBtn-Chiefs" onclick="toggleTrendTeam(this,'Chiefs')">Chiefs</button>
+          <button class="filter-btn active" id="trendBtn-Cowboys" onclick="toggleTrendTeam(this,'Cowboys')">Cowboys</button>
+          <button class="filter-btn active" id="trendBtn-Patriots" onclick="toggleTrendTeam(this,'Patriots')">Patriots</button>
+          <button class="filter-btn" id="trendBtn-Eagles" onclick="toggleTrendTeam(this,'Eagles')">Eagles</button>
+          <button class="filter-btn" id="trendBtn-Steelers" onclick="toggleTrendTeam(this,'Steelers')">Steelers</button>
+          <button class="filter-btn" id="trendBtn-Rams" onclick="toggleTrendTeam(this,'Rams')">Rams</button>
+        </div>
+      </div>
+      <div class="chart-wrap" style="height:320px">
+        <canvas id="trendLineChart"></canvas>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="section-title" style="margin-bottom:14px">League-Wide <span>TV Viewership</span> (M)</div>
+        <div class="chart-wrap" style="height:220px">
+          <canvas id="leagueViewChart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="section-title" style="margin-bottom:14px">Stadium <span>Attendance</span> Rate (%)</div>
+        <div class="chart-wrap" style="height:220px">
+          <canvas id="attTrendChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ PANEL 4: CORRELATION -->
+  <div id="panel-correlation" class="panel">
+    <div class="kpi-row">
+      <div class="kpi-card" style="--kpi-color:#f5c518">
+        <div class="kpi-label">Correlation (r)</div>
+        <div class="kpi-value">0.71</div>
+        <div class="kpi-sub">Win% vs composite popularity</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#38bdf8">
+        <div class="kpi-label">Exception: Cowboys</div>
+        <div class="kpi-value">0.47</div>
+        <div class="kpi-sub">High pop, moderate win rate</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#4ade80">
+        <div class="kpi-label">Best Win% (2015–24)</div>
+        <div class="kpi-value">Patriots</div>
+        <div class="kpi-sub">72% avg win rate</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#c084fc">
+        <div class="kpi-label">Legacy Effect Teams</div>
+        <div class="kpi-value">4</div>
+        <div class="kpi-sub">High pop despite &lt;50% win rate</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:20px">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Win Rate vs <span>Popularity Score</span></div>
+          <div class="section-desc">Each bubble = one team · size = stadium attendance · color = conference</div>
+        </div>
+        <div class="filter-row">
+          <button class="filter-btn active" onclick="filterScatter(this,'ALL')">All Teams</button>
+          <button class="filter-btn" onclick="filterScatter(this,'AFC')">AFC Only</button>
+          <button class="filter-btn" onclick="filterScatter(this,'NFC')">NFC Only</button>
+        </div>
+      </div>
+      <div class="chart-wrap" style="height:400px">
+        <canvas id="scatterChart"></canvas>
+      </div>
+      <div class="corr-note">Pearson r = 0.71 · Strong positive correlation · Notable outliers: Cowboys (brand), Packers (legacy), Browns (loyal local base)</div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="section-title" style="margin-bottom:14px">Win Rate by <span>Conference</span></div>
+        <div class="chart-wrap" style="height:200px">
+          <canvas id="confWinChart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="section-title" style="margin-bottom:14px">Popularity Change After <span>Championship</span></div>
+        <div class="chart-wrap" style="height:200px">
+          <canvas id="champEffect"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /page -->
+
+<script>
+// ═══════════════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════════════
+const TEAMS = [
+  {name:'Cowboys',    conf:'NFC', tv:21.4, trends:88, att:99, score:94, winPct:0.54, home:28, state:'TX'},
+  {name:'Chiefs',     conf:'AFC', tv:20.1, trends:98, att:97, score:92, winPct:0.72, home:42, state:'KS'},
+  {name:'Patriots',   conf:'AFC', tv:19.8, trends:82, att:96, score:89, winPct:0.72, home:44, state:'MA'},
+  {name:'Steelers',   conf:'AFC', tv:18.9, trends:78, att:98, score:86, winPct:0.58, home:55, state:'PA'},
+  {name:'Packers',    conf:'NFC', tv:17.6, trends:74, att:100, score:83, winPct:0.60, home:72, state:'WI'},
+  {name:'49ers',      conf:'NFC', tv:17.1, trends:79, att:97, score:81, winPct:0.57, home:38, state:'CA'},
+  {name:'Eagles',     conf:'NFC', tv:16.8, trends:77, att:99, score:80, winPct:0.56, home:52, state:'PA'},
+  {name:'Giants',     conf:'NFC', tv:16.2, trends:68, att:91, score:76, winPct:0.43, home:49, state:'NY'},
+  {name:'Bears',      conf:'NFC', tv:15.9, trends:65, att:93, score:74, winPct:0.42, home:61, state:'IL'},
+  {name:'Seahawks',   conf:'NFC', tv:15.4, trends:66, att:97, score:73, winPct:0.56, home:58, state:'WA'},
+  {name:'Ravens',     conf:'AFC', tv:15.1, trends:67, att:96, score:72, winPct:0.64, home:53, state:'MD'},
+  {name:'Raiders',    conf:'AFC', tv:14.8, trends:63, att:90, score:70, winPct:0.44, home:34, state:'NV'},
+  {name:'Broncos',    conf:'AFC', tv:14.5, trends:61, att:95, score:68, winPct:0.47, home:60, state:'CO'},
+  {name:'Vikings',    conf:'NFC', tv:14.2, trends:60, att:94, score:67, winPct:0.52, home:58, state:'MN'},
+  {name:'Bengals',    conf:'AFC', tv:14.0, trends:65, att:88, score:66, winPct:0.50, home:50, state:'OH'},
+  {name:'Saints',     conf:'NFC', tv:13.8, trends:62, att:99, score:65, winPct:0.53, home:65, state:'LA'},
+  {name:'Bills',      conf:'AFC', tv:13.5, trends:71, att:97, score:64, winPct:0.58, home:64, state:'NY'},
+  {name:'Rams',       conf:'NFC', tv:13.2, trends:64, att:89, score:63, winPct:0.55, home:31, state:'CA'},
+  {name:'Chargers',   conf:'AFC', tv:12.9, trends:55, att:84, score:59, winPct:0.50, home:29, state:'CA'},
+  {name:'Falcons',    conf:'NFC', tv:12.6, trends:54, att:91, score:58, winPct:0.44, home:57, state:'GA'},
+  {name:'Panthers',   conf:'NFC', tv:12.3, trends:51, att:90, score:56, winPct:0.40, home:62, state:'NC'},
+  {name:'Titans',     conf:'AFC', tv:12.0, trends:49, att:88, score:54, winPct:0.50, home:59, state:'TN'},
+  {name:'Browns',     conf:'AFC', tv:11.8, trends:52, att:93, score:53, winPct:0.39, home:68, state:'OH'},
+  {name:'Lions',      conf:'NFC', tv:11.5, trends:58, att:94, score:52, winPct:0.41, home:63, state:'MI'},
+  {name:'Dolphins',   conf:'AFC', tv:11.3, trends:53, att:86, score:51, winPct:0.49, home:46, state:'FL'},
+  {name:'Colts',      conf:'AFC', tv:11.1, trends:48, att:87, score:49, winPct:0.50, home:55, state:'IN'},
+  {name:'Commanders', conf:'NFC', tv:10.9, trends:45, att:82, score:47, winPct:0.42, home:48, state:'DC'},
+  {name:'Texans',     conf:'AFC', tv:10.7, trends:50, att:92, score:46, winPct:0.45, home:60, state:'TX'},
+  {name:'Cardinals',  conf:'NFC', tv:10.4, trends:41, att:80, score:43, winPct:0.38, home:54, state:'AZ'},
+  {name:'Buccaneers', conf:'NFC', tv:10.2, trends:44, att:88, score:42, winPct:0.50, home:48, state:'FL'},
+  {name:'Jaguars',    conf:'AFC', tv:9.8,  trends:38, att:79, score:38, winPct:0.38, home:57, state:'FL'},
+  {name:'Jets',       conf:'AFC', tv:9.5,  trends:42, att:83, score:37, winPct:0.37, home:45, state:'NY'},
+];
+
+const SEASONS = [2015,2016,2017,2018,2019,2020,2021,2022,2023,2024];
+
+const TREND_DATA = {
+  Chiefs:   [28, 32, 40, 55, 62, 71, 82, 88, 95, 98],
+  Cowboys:  [78, 80, 82, 79, 81, 80, 83, 85, 86, 88],
+  Patriots: [88, 90, 92, 89, 85, 80, 74, 70, 68, 72],
+  Eagles:   [52, 55, 58, 72, 62, 60, 65, 74, 78, 77],
+  Steelers: [72, 74, 70, 68, 72, 70, 73, 75, 74, 78],
+  Rams:     [40, 45, 52, 60, 58, 55, 72, 65, 60, 64],
+};
+
+const LEAGUE_TV = [14.2, 15.0, 15.2, 14.8, 16.0, 15.5, 16.8, 17.2, 18.1, 17.8];
+const LEAGUE_ATT = [88.2, 89.0, 91.0, 92.5, 93.8, 0, 87.4, 91.2, 93.5, 94.2];
+
+const TEAM_COLORS = {
+  Chiefs:   '#e31837', Cowboys: '#003594', Patriots: '#002244',
+  Eagles:   '#004c54', Steelers:'#ffb612', Rams:     '#003594',
+};
+
+// Map data: state interest per team (representative)
+const MAP_DATA = {
+  Cowboys:  {TX:100,OK:88,AR:72,LA:65,NM:60,MS:55,TN:50,AL:48,KS:42,MO:40,CO:38,AZ:35,GA:30,FL:28,NC:25,SC:22,CA:20,NY:18,IL:15,PA:12,MI:10,OH:9,WA:8,OR:7,MN:6,WI:5,IA:5,NE:5,ND:4,SD:4,MT:4,ID:4,WY:4,UT:4,NV:4,HI:4,AK:3,ME:3,NH:3,VT:3,MA:3,RI:3,CT:3,NJ:3,DE:3,MD:3,DC:3,VA:3,WV:3,KY:3,IN:3},
+  Chiefs:   {KS:100,MO:95,NE:82,IA:75,OK:68,AR:60,KY:55,TN:50,IN:48,IL:45,WI:40,MN:38,SD:35,ND:32,MT:28,WY:25,CO:22,UT:20,ID:18,NV:15,AZ:12,CA:10,TX:10,OH:10,MI:8,PA:7,NY:6,FL:6,GA:5,NC:5,SC:4,VA:4,WV:4,MD:4,DC:4,NM:4,WA:4,OR:4,AL:4,MS:4,LA:4,ME:3,NH:3,VT:3,MA:3,RI:3,CT:3,NJ:3,DE:3,HI:3,AK:3},
+  Patriots: {MA:100,CT:92,RI:90,NH:88,VT:85,ME:82,NY:55,NJ:48,PA:38,FL:32,CA:28,IL:22,TX:18,OH:15,MI:12,GA:10,NC:8,WA:8,CO:7,AZ:7,VA:7,MD:7,DC:7,MN:6,WI:6,MO:6,TN:5,IN:5,KY:5,SC:5,AL:4,MS:4,LA:4,AR:4,OK:4,KS:4,NE:4,IA:4,SD:3,ND:3,MT:3,WY:3,ID:3,UT:3,NV:3,NM:3,OR:3,HI:3,AK:3,DE:3,WV:3},
+  Packers:  {WI:100,MN:72,MI:65,IA:58,IL:52,MO:40,IN:35,OH:30,SD:28,ND:26,NE:24,KS:20,KY:18,TN:15,PA:12,NY:10,CA:8,TX:7,FL:6,CO:5,WA:5,OR:5,MT:4,ID:4,WY:4,UT:4,NV:3,AZ:3,NM:3,OK:3,AR:3,MS:3,AL:3,GA:3,SC:3,NC:3,VA:3,WV:3,MD:3,DC:3,NJ:3,DE:3,CT:3,RI:3,MA:3,NH:3,VT:3,ME:3,HI:3,AK:3,LA:3},
+  Steelers: {PA:100,WV:88,OH:75,MD:65,VA:55,KY:48,TN:42,NC:35,DE:30,NJ:28,NY:22,IN:20,IL:15,MI:12,GA:10,FL:8,TX:7,CA:6,CO:5,MO:5,SC:5,AL:4,MS:4,LA:4,AR:4,KS:4,NE:4,IA:4,MN:4,WI:4,SD:3,ND:3,MT:3,WY:3,ID:3,UT:3,NV:3,AZ:3,NM:3,OK:3,WA:3,OR:3,MA:3,CT:3,RI:3,NH:3,VT:3,ME:3,HI:3,AK:3,DC:3},
+  Bears:    {IL:100,IN:82,WI:65,IA:58,MO:45,MI:38,MN:32,OH:25,KY:20,TN:15,KS:12,NE:10,SD:8,ND:7,WY:5,MT:5,CO:4,UT:4,ID:4,NV:3,CA:3,TX:3,FL:3,GA:3,NC:3,VA:3,MD:3,DC:3,PA:3,NY:3,NJ:3,CT:3,MA:3,RI:3,NH:3,VT:3,ME:3,DE:3,WV:3,SC:3,AL:3,MS:3,LA:3,AR:3,OK:3,NM:3,AZ:3,WA:3,OR:3,HI:3,AK:3},
+  Giants:   {NY:100,NJ:95,CT:80,PA:60,DE:55,MD:50,DC:45,VA:35,MA:28,RI:22,NH:18,VT:15,ME:12,WV:10,NC:8,SC:6,GA:5,FL:5,OH:4,MI:4,IL:4,IN:4,KY:4,TN:4,CA:3,TX:3,CO:3,WA:3,OR:3,AZ:3,NV:3,MN:3,WI:3,MO:3,IA:3,KS:3,NE:3,SD:3,ND:3,MT:3,WY:3,ID:3,UT:3,NM:3,OK:3,AR:3,AL:3,MS:3,LA:3,HI:3,AK:3},
+  '49ers':  {CA:100,OR:72,WA:55,NV:48,AZ:38,HI:35,AK:28,ID:22,UT:18,MT:15,WY:12,CO:10,NM:8,TX:6,FL:5,NY:5,IL:4,PA:4,OH:4,MI:4,MN:4,WI:4,IN:4,KY:4,TN:4,GA:4,NC:4,VA:4,MD:4,DC:4,NJ:4,MA:4,CT:4,RI:4,NH:3,VT:3,ME:3,DE:3,WV:3,SC:3,AL:3,MS:3,LA:3,AR:3,OK:3,KS:3,NE:3,IA:3,MO:3,SD:3,ND:3},
+};
+
+// ═══════════════════════════════════════════════════════
+// PANEL SWITCHING
+// ═══════════════════════════════════════════════════════
+function showPanel(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-'+id).classList.add('active');
+  event.target.classList.add('active');
+  if (id==='geography' && !mapDrawn) drawMap();
+  if (id==='trends' && !trendsDrawn) drawTrends();
+  if (id==='correlation' && !corrDrawn) drawCorrelation();
+}
+
+// ═══════════════════════════════════════════════════════
+// OVERVIEW: RANKING TABLE
+// ═══════════════════════════════════════════════════════
+let currentConf = 'ALL';
+function renderTable(conf) {
+  const body = document.getElementById('rankBody');
+  const filtered = conf==='ALL' ? TEAMS : TEAMS.filter(t=>t.conf===conf);
+  body.innerHTML = filtered.map((t,i)=>`
+    <tr>
+      <td class="rank-num ${i<3?'top3':''}">${i+1}</td>
+      <td class="team-name-cell">${t.name}<span class="team-conf">${t.conf}</span></td>
+      <td class="right" style="color:var(--text-primary)">${t.tv.toFixed(1)}</td>
+      <td class="right">
+        <div class="score-bar-wrap">
+          <div class="score-bar"><div class="score-bar-fill" style="width:${t.trends}%;--bar-color:#3b82f6"></div></div>
+          <span class="score-val" style="color:#3b82f6">${t.trends}</span>
+        </div>
+      </td>
+      <td class="right" style="color:var(--text-secondary)">${t.att}%</td>
+      <td class="right">
+        <div class="score-bar-wrap">
+          <div class="score-bar"><div class="score-bar-fill" style="width:${t.score}%;"></div></div>
+          <span class="score-val">${t.score}</span>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+function filterConf(btn, conf) {
+  document.querySelectorAll('.filter-btn').forEach(b=>{
+    if([...document.querySelectorAll('.filter-btn')].indexOf(b) < 3) b.classList.remove('active');
+  });
+  btn.classList.add('active');
+  renderTable(conf);
+}
+renderTable('ALL');
+
+// Mini metric bars
+function renderMetricBars(containerId, key, color, suffix='') {
+  const top8 = [...TEAMS].sort((a,b)=>b[key]-a[key]).slice(0,8);
+  const max = top8[0][key];
+  document.getElementById(containerId).innerHTML = top8.map(t=>`
+    <div class="ratio-row" style="margin-bottom:8px">
+      <div class="ratio-team" style="font-size:12px;width:90px;color:#b0bcd4">${t.name}</div>
+      <div class="score-bar" style="flex:1;height:8px">
+        <div class="score-bar-fill" style="width:${(t[key]/max*100).toFixed(0)}%;--bar-color:${color}"></div>
+      </div>
+      <span style="font-size:12px;color:#ffffff;min-width:44px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-weight:700">${typeof t[key]==='number' && key==='tv' ? t[key].toFixed(1)+'M' : t[key]+suffix}</span>
+    </div>
+  `).join('');
+}
+renderMetricBars('tvBars','tv','#38bdf8');
+renderMetricBars('trendBars','trends','#c084fc');
+renderMetricBars('attBars','att','#4ade80','%');
+
+// ═══════════════════════════════════════════════════════
+// OVERVIEW: POPULARITY BAR CHART
+// ═══════════════════════════════════════════════════════
+const top15 = [...TEAMS].slice(0,15);
+new Chart(document.getElementById('popularityBarChart'), {
+  type: 'bar',
+  data: {
+    labels: top15.map(t=>t.name),
+    datasets: [{
+      label: 'Composite Score',
+      data: top15.map(t=>t.score),
+      backgroundColor: top15.map((t,i)=> i===0 ? '#f5c518' : i<3 ? 'rgba(245,197,24,0.6)' : 'rgba(56,189,248,0.4)'),
+      borderColor: top15.map((t,i)=> i===0 ? '#ffe066' : i<3 ? '#f5c518' : '#38bdf8'),
+      borderWidth: 1,
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    indexAxis: 'y',
+    plugins: { legend:{display:false}, tooltip:{
+      backgroundColor:'#0e1726', borderColor:'rgba(245,197,24,0.3)', borderWidth:1,
+      titleColor:'#ffffff', bodyColor:'#b0bcd4',
+      callbacks:{label: ctx=>`Score: ${ctx.raw}/100`}
+    }},
+    scales: {
+      x: { min:0, max:100, grid:{color:'rgba(255,255,255,0.08)'}, ticks:{color:'#7a90b0',font:{size:11}} },
+      y: { grid:{display:false}, ticks:{color:'#b0bcd4',font:{size:12,family:'Barlow Condensed',weight:'600'}} }
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// GEOGRAPHY: US MAP
+// ═══════════════════════════════════════════════════════
+let mapDrawn = false;
+let mapSvg, mapPath, mapFeatures;
+const STATE_FIPS = {"01":"AL","02":"AK","04":"AZ","05":"AR","06":"CA","08":"CO","09":"CT","10":"DE","11":"DC","12":"FL","13":"GA","15":"HI","16":"ID","17":"IL","18":"IN","19":"IA","20":"KS","21":"KY","22":"LA","23":"ME","24":"MD","25":"MA","26":"MI","27":"MN","28":"MS","29":"MO","30":"MT","31":"NE","32":"NV","33":"NH","34":"NJ","35":"NM","36":"NY","37":"NC","38":"ND","39":"OH","40":"OK","41":"OR","42":"PA","44":"RI","45":"SC","46":"SD","47":"TN","48":"TX","49":"UT","50":"VT","51":"VA","53":"WA","54":"WV","55":"WI","56":"WY"};
+
+function drawMap() {
+  mapDrawn = true;
+  const container = document.getElementById('map-container');
+  const W = 900, H = 560;
+  const svg = d3.select(container).append('svg').attr('viewBox',`0 0 ${W} ${H}`).style('width','100%').style('height','auto');
+  const proj = d3.geoAlbersUsa().scale(1150).translate([W/2, H/2]);
+  mapPath = d3.geoPath(proj);
+  mapSvg = svg;
+
+  d3.json('https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json').then(us => {
+    mapFeatures = topojson.feature(us, us.objects.states).features;
+    svg.selectAll('path')
+      .data(mapFeatures)
+      .join('path')
+      .attr('d', mapPath)
+      .attr('class','state-path')
+      .attr('stroke','rgba(255,255,255,0.18)')
+      .attr('stroke-width','0.5')
+      .attr('fill','#1a2240');
+    updateMap();
+  });
+}
+
+function updateMap() {
+  if(!mapSvg) return;
+  const team = document.getElementById('mapTeamSelect').value;
+  const data = MAP_DATA[team] || {};
+  const colorScale = d3.scaleSequential([0,100], d3.interpolateBlues);
+  mapSvg.selectAll('.state-path')
+    .transition().duration(400)
+    .attr('fill', d => {
+      const abbr = STATE_FIPS[String(d.id).padStart(2,'0')];
+      const val = data[abbr] || 2;
+      return d3.interpolate('#162035','#38bdf8')(val/100);
+    });
+}
+
+// ═══════════════════════════════════════════════════════
+// GEOGRAPHY: HOME/AWAY RATIO
+// ═══════════════════════════════════════════════════════
+const RATIO_TEAMS = [
+  {name:'Packers',  home:72, conf:'NFC'},
+  {name:'Bears',    home:61, conf:'NFC'},
+  {name:'Steelers', home:55, conf:'AFC'},
+  {name:'Eagles',   home:52, conf:'NFC'},
+  {name:'Browns',   home:68, conf:'AFC'},
+  {name:'Saints',   home:65, conf:'NFC'},
+  {name:'Chiefs',   home:42, conf:'AFC'},
+  {name:'Cowboys',  home:28, conf:'NFC'},
+  {name:'Rams',     home:31, conf:'NFC'},
+  {name:'Chargers', home:29, conf:'AFC'},
+];
+
+document.getElementById('ratioChart').innerHTML = RATIO_TEAMS.map(t=>`
+  <div class="ratio-row">
+    <div class="ratio-team">${t.name} <span style="font-size:10px;color:#6b7fa0">${t.conf}</span></div>
+    <div class="ratio-bar-wrap">
+      <div class="ratio-home" style="width:${t.home}%"></div>
+      <div class="ratio-away" style="width:${100-t.home}%"></div>
+    </div>
+    <div class="ratio-labels">
+      <span style="color:#f5c518">${t.home}%</span>
+      <span style="color:#6b7fa0">/</span>
+      <span style="color:#38bdf8">${100-t.home}%</span>
+    </div>
+  </div>
+`).join('');
+
+// ═══════════════════════════════════════════════════════
+// TRENDS
+// ═══════════════════════════════════════════════════════
+let trendsDrawn = false;
+let trendChart;
+const activeTeams = new Set(['Chiefs','Cowboys','Patriots']);
+const TREND_COLORS_MAP = {
+  Chiefs:'#e31837', Cowboys:'#003594', Patriots:'#002244',
+  Eagles:'#004c54', Steelers:'#ffb612', Rams:'#b3995d'
+};
+const TREND_COLORS_BRIGHT = {
+  Chiefs:'#ff4d6d', Cowboys:'#60a5fa', Patriots:'#818cf8',
+  Eagles:'#34d399', Steelers:'#fde047', Rams:'#fb923c'
+};
+
+function drawTrends() {
+  trendsDrawn = true;
+  buildTrendChart();
+
+  // League TV
+  new Chart(document.getElementById('leagueViewChart'),{
+    type:'line',
+    data:{
+      labels: SEASONS,
+      datasets:[{
+        label:'Avg viewers (M)',
+        data: LEAGUE_TV,
+        borderColor:'#38bdf8',
+        backgroundColor:'rgba(56,189,248,0.15)',
+        fill:true, tension:0.4, pointRadius:4,
+        pointBackgroundColor:'#38bdf8',
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{backgroundColor:'#0e1726',borderColor:'rgba(56,189,248,0.3)',borderWidth:1,titleColor:'#ffffff',bodyColor:'#b0bcd4'}},
+      scales:{
+        x:{grid:{color:'rgba(255,255,255,0.08)'},ticks:{color:'#7a90b0',font:{size:11}}},
+        y:{grid:{color:'rgba(255,255,255,0.08)'},ticks:{color:'#7a90b0',font:{size:11}},min:12,max:20}
+      }
+    }
+  });
+
+  // Attendance (skip 2020)
+  const attLabels = SEASONS.filter((_,i)=>i!==5);
+  const attData = LEAGUE_ATT.filter(v=>v>0);
+  new Chart(document.getElementById('attTrendChart'),{
+    type:'bar',
+    data:{
+      labels: attLabels,
+      datasets:[{
+        label:'Attendance %',
+        data: attData,
+        backgroundColor:'rgba(74,222,128,0.45)',
+        borderColor:'#4ade80',
+        borderWidth:1, borderRadius:3,
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{backgroundColor:'#0e1726',borderColor:'rgba(74,222,128,0.3)',borderWidth:1,titleColor:'#ffffff',bodyColor:'#b0bcd4',callbacks:{label:ctx=>`${ctx.raw}% capacity`}}},
+      scales:{
+        x:{grid:{color:'rgba(255,255,255,0.08)'},ticks:{color:'#7a90b0',font:{size:11}}},
+        y:{grid:{color:'rgba(255,255,255,0.08)'},ticks:{color:'#7a90b0',font:{size:11}},min:80,max:100}
+      }
+    }
+  });
+}
+
+function buildTrendChart() {
+  if(trendChart) trendChart.destroy();
+  const datasets = [...activeTeams].map(team=>({
+    label: team,
+    data: TREND_DATA[team],
+    borderColor: TREND_COLORS_BRIGHT[team] || '#8b93a8',
+    backgroundColor: 'transparent',
+    tension: 0.4, borderWidth: 2.5,
+    pointRadius: 3, pointBackgroundColor: TREND_COLORS_BRIGHT[team] || '#8b93a8',
+  }));
+  trendChart = new Chart(document.getElementById('trendLineChart'),{
+    type:'line',
+    data:{ labels: SEASONS, datasets },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:true, position:'top', labels:{color:'#b0bcd4',font:{size:12},boxWidth:12,padding:16}},
+        tooltip:{backgroundColor:'#0e1726',borderColor:'rgba(255,255,255,0.15)',borderWidth:1,titleColor:'#ffffff',bodyColor:'#b0bcd4'}
+      },
+      scales:{
+        x:{grid:{color:'rgba(255,255,255,0.08)'},ticks:{color:'#7a90b0',font:{size:12}}},
+        y:{grid:{color:'rgba(255,255,255,0.08)'},ticks:{color:'#7a90b0',font:{size:12}},min:0,max:100,title:{display:true,text:'Google Trends Index',color:'#7a90b0',font:{size:11}}}
+      }
+    }
+  });
+}
+
+function toggleTrendTeam(btn, team) {
+  if(activeTeams.has(team)) {
+    if(activeTeams.size===1) return;
+    activeTeams.delete(team);
+    btn.classList.remove('active');
+  } else {
+    activeTeams.add(team);
+    btn.classList.add('active');
+  }
+  if(trendsDrawn) buildTrendChart();
+}
+
+// ═══════════════════════════════════════════════════════
+// CORRELATION
+// ═══════════════════════════════════════════════════════
+let corrDrawn = false;
+let scatterChart;
+
+function drawCorrelation() {
+  corrDrawn = true;
+  buildScatter('ALL');
+
+  // Conference win rates
+  const afcTeams = TEAMS.filter(t=>t.conf==='AFC');
+  const nfcTeams = TEAMS.filter(t=>t.conf==='NFC');
+  const afcAvg = (afcTeams.reduce((s,t)=>s+t.winPct,0)/afcTeams.length*100).toFixed(1);
+  const nfcAvg = (nfcTeams.reduce((s,t)=>s+t.winPct,0)/nfcTeams.length*100).toFixed(1);
+
+  new Chart(document.getElementById('confWinChart'),{
+    type:'bar',
+    data:{
+      labels:['AFC','NFC'],
+      datasets:[{
+        label:'Avg Win %',
+        data:[afcAvg, nfcAvg],
+        backgroundColor:['rgba(56,189,248,0.55)','rgba(245,197,24,0.6)'],
+        borderColor:['#38bdf8','#f5c518'],
+        borderWidth:1, borderRadius:6,
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{backgroundColor:'#0e1726',borderColor:'rgba(255,255,255,0.15)',borderWidth:1,titleColor:'#ffffff',bodyColor:'#b0bcd4',callbacks:{label:ctx=>`Win rate: ${ctx.raw}%`}}},
+      scales:{
+        x:{grid:{display:false},ticks:{color:'#b0bcd4',font:{size:13,family:'Barlow Condensed',weight:'600'}}},
+        y:{grid:{color:'rgba(255,255,255,0.08)'},ticks:{color:'#7a90b0',font:{size:11}},min:45,max:55,title:{display:true,text:'Win %',color:'#7a90b0',font:{size:11}}}
+      }
+    }
+  });
+
+  // Championship effect on popularity
+  new Chart(document.getElementById('champEffect'),{
+    type:'bar',
+    data:{
+      labels:['Year before','Champ year','1yr after','2yr after','3yr after'],
+      datasets:[{
+        label:'Popularity change %',
+        data:[0, 28, 35, 22, 14],
+        backgroundColor:['rgba(255,255,255,0.1)','rgba(245,197,24,0.85)','rgba(245,197,24,0.6)','rgba(245,197,24,0.4)','rgba(245,197,24,0.22)'],
+        borderColor:['rgba(255,255,255,0.2)','#f5c518','#f5c518','#f5c518','#f5c518'],
+        borderWidth:1, borderRadius:4,
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{backgroundColor:'#0e1726',borderColor:'rgba(245,197,24,0.3)',borderWidth:1,titleColor:'#ffffff',bodyColor:'#b0bcd4',callbacks:{label:ctx=>`+${ctx.raw}% vs baseline`}}},
+      scales:{
+        x:{grid:{display:false},ticks:{color:'#7a90b0',font:{size:11},maxRotation:20}},
+        y:{grid:{color:'rgba(255,255,255,0.08)'},ticks:{color:'#7a90b0',font:{size:11}},min:0,max:40,title:{display:true,text:'% above baseline',color:'#7a90b0',font:{size:11}}}
+      }
+    }
+  });
+}
+
+function buildScatter(conf) {
+  if(scatterChart) scatterChart.destroy();
+  const data = (conf==='ALL'?TEAMS:TEAMS.filter(t=>t.conf===conf));
+  const afc = data.filter(t=>t.conf==='AFC');
+  const nfc = data.filter(t=>t.conf==='NFC');
+
+  const makePoints = arr => arr.map(t=>({
+    x: Math.round(t.winPct*100),
+    y: t.score,
+    r: Math.max(5, (t.att-75)/2),
+    label: t.name,
+    conf: t.conf,
+  }));
+
+  scatterChart = new Chart(document.getElementById('scatterChart'),{
+    type:'bubble',
+    data:{
+      datasets:[
+        {label:'AFC', data:makePoints(afc), backgroundColor:'rgba(56,189,248,0.55)', borderColor:'#38bdf8', borderWidth:1},
+        {label:'NFC', data:makePoints(nfc), backgroundColor:'rgba(245,197,24,0.6)', borderColor:'#f5c518', borderWidth:1},
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      layout:{padding:20},
+      plugins:{
+        legend:{display:true,position:'top',labels:{color:'#b0bcd4',font:{size:12},boxWidth:12,padding:16}},
+        tooltip:{
+          backgroundColor:'#0e1726',borderColor:'rgba(255,255,255,0.15)',borderWidth:1,
+          titleColor:'#ffffff',bodyColor:'#b0bcd4',
+          callbacks:{
+            title: ctx => ctx[0].raw.label,
+            label: ctx => [`Win rate: ${ctx.raw.x}%`, `Popularity: ${ctx.raw.y}/100`, `Conf: ${ctx.raw.conf}`]
+          }
+        }
+      },
+      scales:{
+        x:{
+          min:30, max:80,
+          grid:{color:'rgba(255,255,255,0.08)'},
+          ticks:{color:'#7a90b0',font:{size:11}},
+          title:{display:true,text:'Win Rate (%)',color:'#b0bcd4',font:{size:12}}
+        },
+        y:{
+          min:25, max:100,
+          grid:{color:'rgba(255,255,255,0.08)'},
+          ticks:{color:'#7a90b0',font:{size:11}},
+          title:{display:true,text:'Composite Popularity Score',color:'#b0bcd4',font:{size:12}}
+        }
+      }
+    }
+  });
+}
+
+function filterScatter(btn, conf) {
+  document.querySelectorAll('#panel-correlation .filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  buildScatter(conf);
+}
+</script>
+</body>
+</html>

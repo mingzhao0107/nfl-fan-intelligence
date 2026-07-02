@@ -1,0 +1,73 @@
+team,state,state_abbr,fan_interest_index
+Cowboys,Texas,TX,100
+Cowboys,Oklahoma,OK,88
+Cowboys,Arkansas,AR,72
+Cowboys,Louisiana,LA,65
+Cowboys,New Mexico,NM,60
+Cowboys,Mississippi,MS,55
+Cowboys,Tennessee,TN,50
+Cowboys,Alabama,AL,48
+Cowboys,Kansas,KS,42
+Cowboys,Missouri,MO,40
+Cowboys,Colorado,CO,38
+Cowboys,Arizona,AZ,35
+Cowboys,Georgia,GA,30
+Cowboys,Florida,FL,28
+Cowboys,California,CA,20
+Chiefs,Kansas,KS,100
+Chiefs,Missouri,MO,95
+Chiefs,Nebraska,NE,82
+Chiefs,Iowa,IA,75
+Chiefs,Oklahoma,OK,68
+Chiefs,Arkansas,AR,60
+Chiefs,Kentucky,KY,55
+Chiefs,Tennessee,TN,50
+Chiefs,Indiana,IN,48
+Chiefs,Illinois,IL,45
+Chiefs,Wisconsin,WI,40
+Chiefs,Minnesota,MN,38
+Chiefs,Colorado,CO,22
+Chiefs,California,CA,10
+Patriots,Massachusetts,MA,100
+Patriots,Connecticut,CT,92
+Patriots,Rhode Island,RI,90
+Patriots,New Hampshire,NH,88
+Patriots,Vermont,VT,85
+Patriots,Maine,ME,82
+Patriots,New York,NY,55
+Patriots,New Jersey,NJ,48
+Patriots,Pennsylvania,PA,38
+Patriots,Florida,FL,32
+Patriots,California,CA,28
+Packers,Wisconsin,WI,100
+Packers,Minnesota,MN,72
+Packers,Michigan,MI,65
+Packers,Iowa,IA,58
+Packers,Illinois,IL,52
+Packers,Missouri,MO,40
+Packers,Indiana,IN,35
+Packers,Ohio,OH,30
+Steelers,Pennsylvania,PA,100
+Steelers,West Virginia,WV,88
+Steelers,Ohio,OH,75
+Steelers,Maryland,MD,65
+Steelers,Virginia,VA,55
+Steelers,Kentucky,KY,48
+Steelers,Tennessee,TN,42
+Steelers,North Carolina,NC,35
+Steelers,Delaware,DE,30
+Steelers,New Jersey,NJ,28
+49ers,California,CA,100
+49ers,Oregon,OR,72
+49ers,Washington,WA,55
+49ers,Nevada,NV,48
+49ers,Arizona,AZ,38
+49ers,Hawaii,HI,35
+49ers,Alaska,AK,28
+Eagles,Pennsylvania,PA,100
+Eagles,New Jersey,NJ,95
+Eagles,Delaware,DE,88
+Eagles,Maryland,MD,72
+Eagles,Virginia,VA,55
+Eagles,New York,NY,40
+Eagles,West Virginia,WV,35
